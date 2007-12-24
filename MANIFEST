@@ -4,3 +4,4 @@ lib/CGP/CLI.pm
 Changes
 README
 INSTALL
+META.yml                                 Module meta-data (added by MakeMaker)

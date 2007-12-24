@@ -9,3 +9,6 @@ You should use the new CGP::CLI command to establish an authenticated
 connection with the CommuniGate Pro server and to create an interface
 object. Then you send commands to the server by calling various interface
 object methods.
+
+See also: http://www.communigate.com/CGPerl/
+
