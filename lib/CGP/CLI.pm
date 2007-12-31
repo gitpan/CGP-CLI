@@ -234,7 +234,7 @@ use IO::Socket;
 use Digest::MD5;
 
 use vars qw($VERSION);
-($VERSION) = '2.7.2';
+($VERSION) = '2.7.2.1';
 
 
 $CGP::SECURE_LOGIN = 1;
