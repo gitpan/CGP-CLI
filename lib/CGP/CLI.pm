@@ -1,12 +1,12 @@
 ####################################################################
 #  Perl interface to CommuniGate Pro CLI.
 #
-#  Version 2.7.2
+#  Version 2.7.5
 #
-#  Original location: <http://www.stalker.com/CGPerl>
-#  Revision history: <http://www.stalker.com/CGPerl/History.html>
+#  Original location: <http://www.communigate.com/CGPerl/>
+#  Revision history: <http://www.communigate.com/CGPerl/History.html>
 #
-#  See <http://www.stalker.com/CommuniGatePro/CLI.html> for the related info.
+#  See <http://www.communigate.com/CommuniGatePro/CLI.html> for the related info.
 #
 #  Mail your comments and error reports to <support@stalker.com>
 
@@ -49,6 +49,8 @@
 # [Get|Set|Update]AccountPrefs
 # GetEffectiveaAccountPrefs
 # KillAccountSessions
+# [Get|Set]AccountACL
+# GetAccountACLRights
 
 ############################## Group Commands
 # ListGroups
@@ -72,6 +74,7 @@
 # [Get|Update|Set]DomainSettings
 # GetDomainEffectiveSettings
 # [Create|Rename|Delete]Domain
+# [Suspend|Resume]Domain
 # CreateSharedDomain
 # CreateDirectoryDomain
 # [Get|Set]DomainRules
@@ -86,7 +89,8 @@
 
 # [Get|Update|Set]DomainDefaults
 # [Get|Update|Set]ClusterDomainDefaults
-# [Get|Update|Set]AllAccountsDefaults
+# [Get|Update|Set]AllAccountsDefaults *
+# [Get|Update|Set]ServerAccountsDefaults
 # GetDomainLocation
 # GetAccountLocation
 # [Get|Update|Set]AccountDefaults
@@ -218,6 +222,7 @@
 # GetTempClientIPs
 # [Get|Set]TempBlacklistedIPs 
 # RemoveAccountSubset
+# List[Domain|Server|Cluster]Telnums
 
 ##############################################################
 
@@ -234,7 +239,7 @@ use IO::Socket;
 use Digest::MD5;
 
 use vars qw($VERSION);
-($VERSION) = '2.7.2.1';
+($VERSION) = '2.7.5';
 
 
 $CGP::SECURE_LOGIN = 1;
@@ -415,6 +420,21 @@ sub GetResponseData {
 ####################################################################
 #    Account commands
 
+sub ListDomainObjects {
+  my ($this, $domainName,$limit,$filter,$what,$cookie) = @_;
+  croak 'usage CGP::CLI->ListDomainObjects($domainName,$limit[,$filter][,$what][,$cookie])'
+      unless defined $domainName && defined $limit;
+  my $line = "ListDomainObjects $domainName";
+  $line .= ' FILTER '.$this->printWords($filter) if defined $filter;
+  $line .= " $limit";
+  $line .= " $what" if $what;
+  $line .= " COOKIE ".$this->printWords($cookie) if defined $cookie;
+  $this->send($line);
+  return undef unless $this->_parseResponse();
+  $this->parseWords($this->getWords);
+}    
+
+
 sub ListAccounts {
   my ($this, $domainName) = @_;
   my $line = 'ListAccounts';
@@ -423,6 +443,20 @@ sub ListAccounts {
   return undef unless $this->_parseResponse();
   $this->parseWords($this->getWords);
 }    
+
+sub ListDomainTelnums {
+  my ($this, $domainName,$limit,$filter) = @_;
+  croak 'usage CGP::CLI->ListDomainTelnums($domainName,$limit[,$filter])'
+      unless defined $domainName && defined $limit;
+  my $line = "ListDomainTelnums $domainName";
+  $line .= ' FILTER '.$this->printWords($filter) if defined $filter;
+  $line .= " $limit";
+  $this->send($line);
+  return undef unless $this->_parseResponse();
+  $this->parseWords($this->getWords);
+}    
+
+
 
 sub CreateAccount {
   my ($this) = shift;;
@@ -749,6 +783,40 @@ sub KillAccountSessions {
   $this->_parseResponse();
 }
 
+sub GetAccountACL {
+  my ($this, $account,$authAccountName) = @_;
+  croak 'usage CGP::CLI->GetAccountACL($accountName [,authAccountName])'
+    unless defined $account;
+    
+  my $line = 'GetAccountACL '.$account;
+  $line .= ' AUTH '.$authAccountName if($authAccountName);
+  $this->send($line);
+  return undef unless $this->_parseResponse();
+  $this->parseWords($this->getWords);
+}
+
+sub SetAccountACL {
+  my ($this, $account, $newACL,$authAccountName) = @_;
+  croak 'usage CGP::CLI->SetAccountACL($acountACL, \%newACL [,$authAccountName])'
+    unless defined $account && defined $newACL;
+  my $line = 'SetAccountACL '.$account;
+  $line .= ' AUTH '.$authAccountName if($authAccountName);  
+  $line.=' '.$this->printWords($newACL);
+  $this->send($line);
+  $this->_parseResponse();
+}
+
+sub GetAccountACLRights {
+  my ($this, $account,$authAccountName) = @_;
+  croak 'usage CGP::CLI->GetAccountACLRights($accountName ,authAccountName)'
+    unless (defined $account && defined $authAccountName);
+    
+  my $line = 'GetAccountACLRights '.$account.' AUTH '.$authAccountName ;
+  $this->send($line);
+  return undef unless $this->_parseResponse();
+  $this->parseWords($this->getWords);
+}
+
 #################################################################
 #  Group managent commands
 
@@ -958,6 +1026,21 @@ sub DeleteDomain {
   my $line = 'DeleteDomain '.$domainName;
   $line .= ' force' if $force;
   $this->send($line);
+  $this->_parseResponse();
+}
+
+sub SuspendDomain {
+  my ($this, $domainName) = @_;
+  croak 'usage CGP::CLI->SuspendDomain($domainName)'
+    unless defined $domainName;
+  $this->send('SuspendDomain '.$domainName);
+  $this->_parseResponse();
+}
+sub ResumeDomain {
+  my ($this, $domainName) = @_;
+  croak 'usage CGP::CLI->ResumeDomain($domainName)'
+    unless defined $domainName;
+  $this->send('ResumeDomain '.$domainName);
   $this->_parseResponse();
 }
 
@@ -1224,6 +1307,25 @@ sub SetAllAccountsDefaults {
   $this->_parseResponse();
 }
 
+sub GetServerAccountDefaults {
+  my $this = shift;
+  $this->send('GetServerAccountDefaults');
+  return undef unless $this->_parseResponse();
+  $this->parseWords($this->getWords);
+}
+
+sub UpdateServerAccountDefaults {
+  my ( $this, $dict ) = @_;
+  $this->send('UpdateServerAccountDefaults '.$this->printWords($dict));
+  $this->_parseResponse();
+}
+
+sub SetServerAccountDefaults {
+  my ( $this, $dict ) = @_;
+  $this->send('SetServerAccountDefaults '.$this->printWords($dict));
+  $this->_parseResponse();
+}
+
 sub GetClusterAccountDefaults {
   my $this = shift;
   $this->send('GetClusterAccountDefaults');
@@ -1303,6 +1405,31 @@ sub GetAccountLocation {
   return undef unless $this->_parseResponse();
   $this->parseWords($this->getWords);
 }
+
+sub ListServerTelnums {
+  my ($this, $limit,$filter) = @_;
+  croak 'usage CGP::CLI->ListServerTelnums($limit[,$filter])'
+      unless defined $limit;
+  my $line = "ListServerTelnums";
+  $line .= ' FILTER '.$this->printWords($filter) if defined $filter;
+  $line .= " $limit";
+  $this->send($line);
+  return undef unless $this->_parseResponse();
+  $this->parseWords($this->getWords);
+}
+ 
+sub ListClusterTelnums {
+  my ($this, $limit,$filter) = @_;
+  croak 'usage CGP::CLI->ListClusterTelnums($limit[,$filter])'
+      unless defined $limit;
+  my $line = "ListClusterTelnums";
+  $line .= ' FILTER '.$this->printWords($filter) if defined $filter;
+  $line .= " $limit";
+  $this->send($line);
+  return undef unless $this->_parseResponse();
+  $this->parseWords($this->getWords);
+}
+
 
 sub GetAccountDefaults {
   my ($this, $domain) = @_;
@@ -2274,10 +2401,11 @@ sub ClearWebUserCache {
 #   Web Interface Integration
 
 sub CreateWebUserSession {
-  my ($this, $accountName, $ipAddress, $wml,$skin) = @_;
-  croak 'usage CGP::CLI->CreateWebUserSession($accountName, $IP_Address[, "WML"[,"mySkin"]] )'
+  my ($this, $accountName, $ipAddress, $wml,$skin,$origAddress) = @_;
+  croak 'usage CGP::CLI->CreateWebUserSession($accountName, $IP_Address[, "WML"[,"mySkin"]][,$origAddress )'
     unless defined $accountName && defined $ipAddress;
   my $line='CreateWebUserSession '.$accountName.' ADDRESS '.$ipAddress;
+  $line .= " FOR $origAddress" if($origAddress);
   $line .= " $wml" if($wml);
   $line .= " SKIN $skin" if($skin);
   
@@ -2285,6 +2413,18 @@ sub CreateWebUserSession {
   return undef unless $this->_parseResponse();
   $this->parseWords($this->getWords);
 }
+
+sub CreateXIMSSSession {
+  my ($this, $accountName, $ipAddress,$origAddress) = @_;
+  croak 'usage CGP::CLI->CreateXIMSSSession($accountName, $IP_Address,[$origAddress] )'
+    unless defined $accountName && defined $ipAddress;
+  my $line='CreateXIMSSSession '.$accountName.' ADDRESS '.$ipAddress;
+  $line .= " FOR $origAddress" if($origAddress);
+  $this->send($line);
+  return undef unless $this->_parseResponse();
+  $this->parseWords($this->getWords);
+}
+
 sub FindWebUserSession {
   my ($this, $accountName,$address) = @_;
   croak 'usage CGP::CLI->FindWebUserSession($accountName [,$address])' unless defined $accountName;
@@ -2308,6 +2448,17 @@ sub GetWebUserSession {
   return undef unless $this->_parseResponse();
   $this->parseWords($this->getWords);
 }
+sub GetSession {
+  my ($this, $sessionID,$domain) = @_;
+  croak 'usage CGP::CLI->GetSession($sessionID [,$domain])' unless defined $sessionID;
+
+  my $line='GetSession '.$sessionID;
+  $line .= ' DOMAIN '.$domain if($domain);
+
+  $this->send($line);
+  return undef unless $this->_parseResponse();
+  $this->parseWords($this->getWords);
+}
 
 
 
@@ -2315,6 +2466,15 @@ sub KillWebUserSession {
   my ($this, $sessionID,$domain) = @_;
   croak 'usage CGP::CLI->KillWebUserSession($sessionID [,$domain])' unless defined $sessionID;
   my $line='KillWebUserSession '.$sessionID;
+  $line .= ' DOMAIN '.$domain if($domain);
+
+  $this->send($line);
+  $this->_parseResponse();
+}
+sub KillSession {
+  my ($this, $sessionID,$domain) = @_;
+  croak 'usage CGP::CLI->KillSession($sessionID [,$domain])' unless defined $sessionID;
+  my $line='KillSession '.$sessionID;
   $line .= ' DOMAIN '.$domain if($domain);
 
   $this->send($line);
@@ -2492,6 +2652,48 @@ sub SetModule {
   $this->send ('SetModule '.$moduleName.' '.$this->printWords($newSettings) );
   $this->_parseResponse();
 }
+
+sub GetQueueSettings {
+  my ( $this ) = @_;
+  $this->send('GetQueueSettings');
+  return undef unless $this->_parseResponse();
+  $this->parseWords($this->getWords);
+}
+sub SetQueueSettings {
+  my ( $this,  $newSettings ) = @_;
+  croak 'usage CGP::CLI->SetQueueSettings(\%newSettings)'
+    unless defined $newSettings;
+  $this->send ('SetQueueSettings '.$this->printWords($newSettings) );
+  $this->_parseResponse();
+}
+
+sub GetSignalSettings {
+  my ( $this ) = @_;
+  $this->send('GetSignalSettings');
+  return undef unless $this->_parseResponse();
+  $this->parseWords($this->getWords);
+}
+sub SetSignalSettings {
+  my ( $this,  $newSettings ) = @_;
+  croak 'usage CGP::CLI->SetSignalSettings(\%newSettings)'
+    unless defined $newSettings;
+  $this->send ('SetSignalSettings '.$this->printWords($newSettings) );
+  $this->_parseResponse();
+}
+sub GetClusterSettings {
+  my ( $this ) = @_;
+  $this->send('GetClusterSettings');
+  return undef unless $this->_parseResponse();
+  $this->parseWords($this->getWords);
+}
+sub SetClusterSettings {
+  my ( $this,  $newSettings ) = @_;
+  croak 'usage CGP::CLI->SetClusterSettings(\%newSettings)'
+    unless defined $newSettings;
+  $this->send ('SetClusterSettings '.$this->printWords($newSettings) );
+  $this->_parseResponse();
+}
+
 
 sub GetLANIPs {
   my ( $this ) = @_;
@@ -2970,6 +3172,12 @@ sub GetSNMPElement {
   return undef unless $this->_parseResponse();
   $this->parseWords($this->getWords);
 }
+sub GetDialogInfo {
+  my ($this, $dialogID) = @_;
+  $this->send('GetDialogInfo '.$dialogID);
+  return undef unless $this->_parseResponse();
+  $this->parseWords($this->getWords);
+}
 
 sub Shutdown {
   my $this = shift;
@@ -3141,7 +3349,7 @@ sub convertOutput {
   my $data = $_[0];
   my $translate = $_[1];
   if(!defined($data)) {
-    return '""';
+    return '#NULL#';
   } elsif(ref($data) eq 'HASH') {
     my $outp='{';
     #$outp.="\n";
